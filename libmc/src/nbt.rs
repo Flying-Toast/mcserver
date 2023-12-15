@@ -52,7 +52,7 @@ pub enum Nbt<'a> {
     Long(i64),
     Float(f32),
     Double(f64),
-    ByteArray(Cow<'a, [u8]>),
+    ByteArray(Cow<'a, [i8]>),
     String(Cow<'a, str>),
     List(NbtList<'a>),
     IntArray(Cow<'a, [i32]>),
@@ -125,12 +125,40 @@ fn read_nbt<R: Read>(r: &mut R, tag: TagType) -> Nbt<'static> {
         TagType::Long => Nbt::Long(read_long(r)),
         TagType::Float => Nbt::Float(read_float(r)),
         TagType::Double => Nbt::Double(read_double(r)),
-        TagType::ByteArray => todo!("byte array nbt"),
+        // TODO: refactor the copy-paste between ByteArray, IntArray, LongArray
+        TagType::ByteArray => {
+            let len = read_int(r);
+            assert!(len >= 0, "len < 0 :(");
+            let len: usize = len.try_into().unwrap();
+            let mut arr = Vec::with_capacity(len);
+            for _ in 0..len {
+                arr.push(read_byte(r));
+            }
+            Nbt::ByteArray(Cow::Owned(arr))
+        }
         TagType::String => Nbt::String(read_ushort_string(r).into()),
         TagType::List => todo!("list nbt"),
         TagType::Compound => Nbt::Compound(Nbt::read_compound(r)),
-        TagType::IntArray => todo!("intarry nbt"),
-        TagType::LongArray => todo!("longarray nbt"),
+        TagType::IntArray => {
+            let len = read_int(r);
+            assert!(len >= 0, "len < 0 :(");
+            let len: usize = len.try_into().unwrap();
+            let mut arr = Vec::with_capacity(len);
+            for _ in 0..len {
+                arr.push(read_int(r));
+            }
+            Nbt::IntArray(Cow::Owned(arr))
+        }
+        TagType::LongArray => {
+            let len = read_int(r);
+            assert!(len >= 0, "len < 0 :(");
+            let len: usize = len.try_into().unwrap();
+            let mut arr = Vec::with_capacity(len);
+            for _ in 0..len {
+                arr.push(read_long(r));
+            }
+            Nbt::LongArray(Cow::Owned(arr))
+        }
         TagType::End => panic!("can't read_nbt() with TagType::End"),
     }
 }
