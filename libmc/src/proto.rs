@@ -195,7 +195,7 @@ impl<R: Read, W: Write> PacketStream<R, W> {
             // Handshake
             (0x00, State::Handshaking) => {
                 let protocol_version = read_varint(&mut self.r);
-                let server_addr = read_string(&mut self.r);
+                let server_addr = read_varint_string(&mut self.r);
                 let server_port = read_ushort(&mut self.r);
                 let next_state = match read_varint(&mut self.r) {
                     1 => HandshakeNextState::Status,
@@ -213,7 +213,7 @@ impl<R: Read, W: Write> PacketStream<R, W> {
             }
             // Login Start
             (0x00, State::Login) => {
-                let name = read_string(&mut self.r);
+                let name = read_varint_string(&mut self.r);
                 let player_uuid = read_uuid(&mut self.r);
                 InPacket::LoginStart { name, player_uuid }
             }
@@ -225,7 +225,7 @@ impl<R: Read, W: Write> PacketStream<R, W> {
             }
             // PluginMessageConfig
             (0x01, State::Config) => {
-                let (channel, strlen) = read_string_with_nread(&mut self.r);
+                let (channel, strlen) = read_varint_string_with_nread(&mut self.r);
                 let data_len = packet_tail_len - strlen;
                 let mut data = vec![0; data_len.try_into().unwrap()];
                 self.r.read_exact(&mut data).unwrap();
@@ -234,7 +234,7 @@ impl<R: Read, W: Write> PacketStream<R, W> {
             }
             // ClientInfoConfig
             (0x00, State::Config) => {
-                let locale = read_string(&mut self.r);
+                let locale = read_varint_string(&mut self.r);
                 let view_distance = read_byte(&mut self.r);
                 let chat_mode = match read_varint(&mut self.r) {
                     0 => ChatMode::Enabled,
@@ -413,9 +413,10 @@ pub(crate) fn read_varint_with_nread<R: Read>(r: &mut R) -> (i64, i64) {
     (ret, nread)
 }
 
-// returns the read string and how many bytes were read to deserialize the string.
-// (because of Java's stupid "Modified UTF-8" the # of bytes read might differ from string.len().
-pub(crate) fn read_string_with_nread<R: Read>(r: &mut R) -> (String, i64) {
+/// Reads a string prefixed by its length as a varint.
+/// Returns the read string and how many bytes were read to deserialize the string.
+/// (because of Java's stupid "Modified UTF-8" the # of bytes read might differ from string.len().
+pub(crate) fn read_varint_string_with_nread<R: Read>(r: &mut R) -> (String, i64) {
     let (len, lennread) = read_varint_with_nread(r);
     let mut vs = vec![0; len.try_into().unwrap()];
     r.read_exact(&mut vs).unwrap();
@@ -423,14 +424,40 @@ pub(crate) fn read_string_with_nread<R: Read>(r: &mut R) -> (String, i64) {
     (String::from_utf8(vs).unwrap(), len + lennread)
 }
 
-pub(crate) fn read_string<R: Read>(r: &mut R) -> String {
-    read_string_with_nread(r).0
+pub(crate) fn read_ushort_string<R: Read>(r: &mut R) -> String {
+    let len = read_ushort(r);
+    let mut vs = vec![0; len.try_into().unwrap()];
+    r.read_exact(&mut vs).unwrap();
+    // TODO: convert from Java's "Modified UTF-8" :(
+    String::from_utf8(vs).unwrap()
+}
+
+pub(crate) fn read_varint_string<R: Read>(r: &mut R) -> String {
+    read_varint_string_with_nread(r).0
+}
+
+pub(crate) fn read_short<R: Read>(r: &mut R) -> i16 {
+    let mut b = [0, 0];
+    r.read_exact(&mut b).unwrap();
+    i16::from_be_bytes(b)
 }
 
 pub(crate) fn read_ushort<R: Read>(r: &mut R) -> u16 {
     let mut b = [0, 0];
     r.read_exact(&mut b).unwrap();
     u16::from_be_bytes(b)
+}
+
+pub(crate) fn read_int<R: Read>(r: &mut R) -> i32 {
+    let mut b = [0; 4];
+    r.read_exact(&mut b).unwrap();
+    i32::from_be_bytes(b)
+}
+
+pub(crate) fn read_long<R: Read>(r: &mut R) -> i64 {
+    let mut b = [0; 8];
+    r.read_exact(&mut b).unwrap();
+    i64::from_be_bytes(b)
 }
 
 pub(crate) fn read_byte<R: Read>(r: &mut R) -> i8 {
@@ -443,6 +470,18 @@ pub(crate) fn read_ubyte<R: Read>(r: &mut R) -> u8 {
     let mut b = [0];
     r.read_exact(&mut b).unwrap();
     b[0]
+}
+
+pub(crate) fn read_float<R: Read>(r: &mut R) -> f32 {
+    let mut b = [0; 4];
+    r.read_exact(&mut b).unwrap();
+    f32::from_be_bytes(b)
+}
+
+pub(crate) fn read_double<R: Read>(r: &mut R) -> f64 {
+    let mut b = [0; 8];
+    r.read_exact(&mut b).unwrap();
+    f64::from_be_bytes(b)
 }
 
 pub(crate) fn read_bool<R: Read>(r: &mut R) -> bool {
