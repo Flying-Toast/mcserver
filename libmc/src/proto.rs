@@ -187,17 +187,17 @@ impl<R: Read, W: Write> PacketStream<R, W> {
     }
 
     pub fn next_packet(&mut self) -> InPacket {
-        let packet_len_field = self.read_varint();
-        let (packid, packidnread) = self.read_varint_with_nread();
+        let packet_len_field = read_varint(&mut self.r);
+        let (packid, packidnread) = read_varint_with_nread(&mut self.r);
         let packet_tail_len = packet_len_field - packidnread;
 
         match (packid, self.state) {
             // Handshake
             (0x00, State::Handshaking) => {
-                let protocol_version = self.read_varint();
-                let server_addr = self.read_string();
-                let server_port = self.read_ushort();
-                let next_state = match self.read_varint() {
+                let protocol_version = read_varint(&mut self.r);
+                let server_addr = read_string(&mut self.r);
+                let server_port = read_ushort(&mut self.r);
+                let next_state = match read_varint(&mut self.r) {
                     1 => HandshakeNextState::Status,
                     2 => HandshakeNextState::Login,
                     x => panic!("bad next state {x}"),
@@ -213,8 +213,8 @@ impl<R: Read, W: Write> PacketStream<R, W> {
             }
             // Login Start
             (0x00, State::Login) => {
-                let name = self.read_string();
-                let player_uuid = self.read_uuid();
+                let name = read_string(&mut self.r);
+                let player_uuid = read_uuid(&mut self.r);
                 InPacket::LoginStart { name, player_uuid }
             }
             // LoginAck
@@ -225,7 +225,7 @@ impl<R: Read, W: Write> PacketStream<R, W> {
             }
             // PluginMessageConfig
             (0x01, State::Config) => {
-                let (channel, strlen) = self.read_string_with_nread();
+                let (channel, strlen) = read_string_with_nread(&mut self.r);
                 let data_len = packet_tail_len - strlen;
                 let mut data = vec![0; data_len.try_into().unwrap()];
                 self.r.read_exact(&mut data).unwrap();
@@ -234,23 +234,23 @@ impl<R: Read, W: Write> PacketStream<R, W> {
             }
             // ClientInfoConfig
             (0x00, State::Config) => {
-                let locale = self.read_string();
-                let view_distance = self.read_byte();
-                let chat_mode = match self.read_varint() {
+                let locale = read_string(&mut self.r);
+                let view_distance = read_byte(&mut self.r);
+                let chat_mode = match read_varint(&mut self.r) {
                     0 => ChatMode::Enabled,
                     1 => ChatMode::CommandsOnly,
                     2 => ChatMode::Hidden,
                     x => panic!("bad chat mode '{x}'"),
                 };
-                let chat_colors = self.read_bool();
-                let displayed_skin_parts = self.read_ubyte();
-                let main_hand = match self.read_varint() {
+                let chat_colors = read_bool(&mut self.r);
+                let displayed_skin_parts = read_ubyte(&mut self.r);
+                let main_hand = match read_varint(&mut self.r) {
                     0 => MainHand::Left,
                     1 => MainHand::Right,
                     x => panic!("bad main hand '{x}'"),
                 };
-                let enable_text_filtering = self.read_bool();
-                let allow_server_listings = self.read_bool();
+                let enable_text_filtering = read_bool(&mut self.r);
+                let allow_server_listings = read_bool(&mut self.r);
 
                 InPacket::ClientInfoConfig {
                     locale,
@@ -385,82 +385,82 @@ impl<R: Read, W: Write> PacketStream<R, W> {
         write_varint(&mut self.w, buf.len().try_into().unwrap());
         self.w.write(&buf).unwrap();
     }
+}
 
-    fn read_varint(&mut self) -> i64 {
-        self.read_varint_with_nread().0
-    }
+pub(crate) fn read_varint<R: Read>(r: &mut R) -> i64 {
+    read_varint_with_nread(r).0
+}
 
-    // returns the varint and how many bytes were read for it.
-    // returns (varint, nread).
-    fn read_varint_with_nread(&mut self) -> (i64, i64) {
-        let mut ret = 0;
-        let mut shift = 0;
-        let mut nread = 0;
+// returns the varint and how many bytes were read for it.
+// returns (varint, nread).
+pub(crate) fn read_varint_with_nread<R: Read>(r: &mut R) -> (i64, i64) {
+    let mut ret = 0;
+    let mut shift = 0;
+    let mut nread = 0;
 
-        let mut b = [0];
-        loop {
-            self.r.read_exact(&mut b).unwrap();
-            nread += 1;
-            let cur = b[0];
-            ret |= ((cur & 0b01111111) as i64) << shift;
-            shift += 7;
-            if cur & (1 << 7) == 0 {
-                break;
-            }
-        }
-
-        (ret, nread)
-    }
-
-    // returns the read string and how many bytes were read to deserialize the string.
-    // (because of Java's stupid "Modified UTF-8" the # of bytes read might differ from string.len().
-    fn read_string_with_nread(&mut self) -> (String, i64) {
-        let (len, lennread) = self.read_varint_with_nread();
-        let mut vs = vec![0; len.try_into().unwrap()];
-        self.r.read_exact(&mut vs).unwrap();
-        // TODO: convert from Java's "Modified UTF-8" :(
-        (String::from_utf8(vs).unwrap(), len + lennread)
-    }
-
-    fn read_string(&mut self) -> String {
-        self.read_string_with_nread().0
-    }
-
-    fn read_ushort(&mut self) -> u16 {
-        let mut b = [0, 0];
-        self.r.read_exact(&mut b).unwrap();
-        u16::from_be_bytes(b)
-    }
-
-    fn read_byte(&mut self) -> i8 {
-        let mut b = [0];
-        self.r.read_exact(&mut b).unwrap();
-        i8::from_be_bytes(b)
-    }
-
-    fn read_ubyte(&mut self) -> u8 {
-        let mut b = [0];
-        self.r.read_exact(&mut b).unwrap();
-        b[0]
-    }
-
-    fn read_bool(&mut self) -> bool {
-        match self.read_ubyte() {
-            0 => false,
-            1 => true,
-            _ => panic!("bad bool"),
+    let mut b = [0];
+    loop {
+        r.read_exact(&mut b).unwrap();
+        nread += 1;
+        let cur = b[0];
+        ret |= ((cur & 0b01111111) as i64) << shift;
+        shift += 7;
+        if cur & (1 << 7) == 0 {
+            break;
         }
     }
 
-    fn read_uuid(&mut self) -> u128 {
-        let mut b = [0; 16];
-        self.r.read_exact(&mut b).unwrap();
-        u128::from_be_bytes(b)
+    (ret, nread)
+}
+
+// returns the read string and how many bytes were read to deserialize the string.
+// (because of Java's stupid "Modified UTF-8" the # of bytes read might differ from string.len().
+pub(crate) fn read_string_with_nread<R: Read>(r: &mut R) -> (String, i64) {
+    let (len, lennread) = read_varint_with_nread(r);
+    let mut vs = vec![0; len.try_into().unwrap()];
+    r.read_exact(&mut vs).unwrap();
+    // TODO: convert from Java's "Modified UTF-8" :(
+    (String::from_utf8(vs).unwrap(), len + lennread)
+}
+
+pub(crate) fn read_string<R: Read>(r: &mut R) -> String {
+    read_string_with_nread(r).0
+}
+
+pub(crate) fn read_ushort<R: Read>(r: &mut R) -> u16 {
+    let mut b = [0, 0];
+    r.read_exact(&mut b).unwrap();
+    u16::from_be_bytes(b)
+}
+
+pub(crate) fn read_byte<R: Read>(r: &mut R) -> i8 {
+    let mut b = [0];
+    r.read_exact(&mut b).unwrap();
+    i8::from_be_bytes(b)
+}
+
+pub(crate) fn read_ubyte<R: Read>(r: &mut R) -> u8 {
+    let mut b = [0];
+    r.read_exact(&mut b).unwrap();
+    b[0]
+}
+
+pub(crate) fn read_bool<R: Read>(r: &mut R) -> bool {
+    match read_ubyte(r) {
+        0 => false,
+        1 => true,
+        _ => panic!("bad bool"),
     }
 }
 
+pub(crate) fn read_uuid<R: Read>(r: &mut R) -> u128 {
+    let mut b = [0; 16];
+    r.read_exact(&mut b).unwrap();
+    u128::from_be_bytes(b)
+}
+
 // TODO: is this really correct? negative numbers always send 64 bits?
-fn write_varint<W: Write>(w: &mut W, int: i64) {
+pub(crate) fn write_varint<W: Write>(w: &mut W, int: i64) {
     let seg_bits = 0b01111111;
     let mut int = u64::from_ne_bytes(int.to_ne_bytes());
 
@@ -475,41 +475,41 @@ fn write_varint<W: Write>(w: &mut W, int: i64) {
     }
 }
 
-fn write_ubyte<W: Write>(w: &mut W, byte: u8) {
+pub(crate) fn write_ubyte<W: Write>(w: &mut W, byte: u8) {
     w.write(&[byte]).unwrap();
 }
 
-fn write_ibyte<W: Write>(w: &mut W, byte: i8) {
+pub(crate) fn write_ibyte<W: Write>(w: &mut W, byte: i8) {
     w.write(&byte.to_be_bytes()).unwrap();
 }
 
-fn write_uuid<W: Write>(w: &mut W, uuid: u128) {
+pub(crate) fn write_uuid<W: Write>(w: &mut W, uuid: u128) {
     w.write(&uuid.to_be_bytes()).unwrap();
 }
 
-fn write_string<W: Write>(w: &mut W, s: &str) {
+pub(crate) fn write_string<W: Write>(w: &mut W, s: &str) {
     write_varint(w, s.len().try_into().unwrap());
     // TODO: java's dumbass "Modified UTF-8" again
     w.write(s.as_bytes()).unwrap();
 }
 
-fn write_bool<W: Write>(w: &mut W, b: bool) {
+pub(crate) fn write_bool<W: Write>(w: &mut W, b: bool) {
     write_ubyte(w, b as u8);
 }
 
-fn write_int<W: Write>(w: &mut W, int: i32) {
+pub(crate) fn write_int<W: Write>(w: &mut W, int: i32) {
     w.write(&int.to_be_bytes()).unwrap();
 }
 
-fn write_long<W: Write>(w: &mut W, long: i64) {
+pub(crate) fn write_long<W: Write>(w: &mut W, long: i64) {
     w.write(&long.to_be_bytes()).unwrap();
 }
 
-fn write_game_mode<W: Write>(w: &mut W, gm: GameMode) {
+pub(crate) fn write_game_mode<W: Write>(w: &mut W, gm: GameMode) {
     write_ubyte(w, gm as u8);
 }
 
-fn write_position<W: Write>(w: &mut W, p: &Position) {
+pub(crate) fn write_position<W: Write>(w: &mut W, p: &Position) {
     let mask_26bits: i64 = 0x3FFFFFF;
     let mask_12bits: i64 = 0xFFF;
 
@@ -530,7 +530,7 @@ fn write_position<W: Write>(w: &mut W, p: &Position) {
     w.write(&packed.to_be_bytes()).unwrap();
 }
 
-fn write_bitset<W: Write>(w: &mut W, bs: &BitSet) {
+pub(crate) fn write_bitset<W: Write>(w: &mut W, bs: &BitSet) {
     write_varint(w, bs.longs.len().try_into().unwrap());
     for l in bs.longs.iter().copied() {
         write_long(w, l);
