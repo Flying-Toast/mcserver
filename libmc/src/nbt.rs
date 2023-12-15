@@ -137,7 +137,87 @@ fn read_nbt<R: Read>(r: &mut R, tag: TagType) -> Nbt<'static> {
             Nbt::ByteArray(Cow::Owned(arr))
         }
         TagType::String => Nbt::String(read_ushort_string(r).into()),
-        TagType::List => todo!("list nbt"),
+        TagType::List => {
+            let list_type = read_tagtype(r);
+            let len = read_int(r);
+
+            // TODO: this is awful. fix all the copy-paste
+            Nbt::List(match list_type {
+                TagType::String => {
+                    let mut arr = Vec::with_capacity(len.try_into().unwrap());
+                    if len > 0 {
+                        for _ in 0..len {
+                            arr.push(Cow::Owned(read_ushort_string(r)));
+                        }
+                    }
+                    NbtList::String(Cow::Owned(arr))
+                }
+                TagType::Compound => {
+                    let mut arr = Vec::with_capacity(len.try_into().unwrap());
+                    if len > 0 {
+                        for _ in 0..len {
+                            arr.push(Nbt::read_compound(r));
+                        }
+                    }
+                    NbtList::Compound(Cow::Owned(arr))
+                }
+                TagType::Int => {
+                    let mut arr = Vec::with_capacity(len.try_into().unwrap());
+                    if len > 0 {
+                        for _ in 0..len {
+                            arr.push(read_int(r));
+                        }
+                    }
+                    NbtList::Int(Cow::Owned(arr))
+                }
+                TagType::Long => {
+                    let mut arr = Vec::with_capacity(len.try_into().unwrap());
+                    if len > 0 {
+                        for _ in 0..len {
+                            arr.push(read_long(r));
+                        }
+                    }
+                    NbtList::Long(Cow::Owned(arr))
+                }
+                TagType::Short => {
+                    let mut arr = Vec::with_capacity(len.try_into().unwrap());
+                    if len > 0 {
+                        for _ in 0..len {
+                            arr.push(read_short(r));
+                        }
+                    }
+                    NbtList::Short(Cow::Owned(arr))
+                }
+                TagType::Byte => {
+                    let mut arr = Vec::with_capacity(len.try_into().unwrap());
+                    if len > 0 {
+                        for _ in 0..len {
+                            arr.push(read_byte(r));
+                        }
+                    }
+                    NbtList::Byte(Cow::Owned(arr))
+                }
+                TagType::Double => {
+                    let mut arr = Vec::with_capacity(len.try_into().unwrap());
+                    if len > 0 {
+                        for _ in 0..len {
+                            arr.push(read_double(r));
+                        }
+                    }
+                    NbtList::Double(Cow::Owned(arr))
+                }
+                TagType::Float => {
+                    let mut arr = Vec::with_capacity(len.try_into().unwrap());
+                    if len > 0 {
+                        for _ in 0..len {
+                            arr.push(read_float(r));
+                        }
+                    }
+                    NbtList::Float(Cow::Owned(arr))
+                }
+                x => todo!("implement nbt parsing for lists of {x:?}"),
+            })
+        }
         TagType::Compound => Nbt::Compound(Nbt::read_compound(r)),
         TagType::IntArray => {
             let len = read_int(r);
@@ -205,8 +285,6 @@ mod tests {
 
     #[test]
     fn basic_nbt_deser() {
-        use std::borrow::Cow;
-
         let buf = [
             0x0a, 0x00, 0x0b, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64,
             0x08, 0x00, 0x04, 0x6d, 0x65, 0x6d, 0x65, 0x00, 0x09, 0x42, 0x61, 0x6e, 0x61, 0x6e,
