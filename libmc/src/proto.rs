@@ -1,3 +1,4 @@
+use crate::*;
 use std::io::{Read, Write};
 
 #[derive(Debug, Copy, Clone)]
@@ -120,6 +121,17 @@ impl BitSet {
     }
 }
 
+#[derive(Debug)]
+pub struct BlockEntity<'a> {
+    /// Valid values: 0-15
+    pub x: u8,
+    pub z: u8,
+    pub y: i16,
+    /// the type of this blockentity
+    pub blockent_type: i64,
+    pub data: CompoundNbt<'a>,
+}
+
 // TODO: OutPacket trait, and make each outpacket variant its own type
 #[derive(Debug)]
 pub enum OutPacket<'a> {
@@ -158,6 +170,19 @@ pub enum OutPacket<'a> {
         is_superflat: bool,
         death_info: Option<DeathInfo<'a>>,
         portal_cooldown: i64,
+    },
+    ChunkDataAndUpdateLight {
+        chunk_x: i32,
+        chunk_z: i32,
+        heightmaps: CompoundNbt<'a>,
+        data: &'a [i8],
+        block_entities: &'a [BlockEntity<'a>],
+        sky_light_mask: BitSet,
+        block_light_mask: BitSet,
+        empty_sky_light_mask: BitSet,
+        empty_block_light_mask: BitSet,
+        sky_light_arrays: &'a [[i8; 2048]],
+        block_light_arrays: &'a [[i8; 2048]],
     },
 }
 
@@ -377,6 +402,51 @@ impl<R: Read, W: Write> PacketStream<R, W> {
                 OutPacket::FinishConfig => {
                     // packet ID:
                     write_varint(buf, 0x02);
+                }
+                OutPacket::ChunkDataAndUpdateLight {
+                    chunk_x,
+                    chunk_z,
+                    heightmaps,
+                    data,
+                    block_entities,
+                    sky_light_mask,
+                    block_light_mask,
+                    empty_sky_light_mask,
+                    empty_block_light_mask,
+                    sky_light_arrays,
+                    block_light_arrays,
+                } => {
+                    // packet ID:
+                    write_varint(buf, 0x25);
+
+                    write_int(buf, chunk_x);
+                    write_int(buf, chunk_z);
+                    write_nbt(buf, heightmaps);
+                    write_varint(buf, data.len().try_into().unwrap());
+                    for x in data.iter().copied() {
+                        write_ibyte(buf, x);
+                    }
+                    write_varint(buf, block_entities.len().try_into().unwrap());
+                    for bent in block_entities.iter() {
+                        write_block_entity(buf, bent);
+                    }
+                    write_bitset(buf, &sky_light_mask);
+                    write_bitset(buf, &block_light_mask);
+                    write_bitset(buf, &empty_sky_light_mask);
+                    write_bitset(buf, &empty_block_light_mask);
+                    write_varint(buf, sky_light_arrays.len().try_into().unwrap());
+                    for arr in sky_light_arrays.iter() {
+                        write_varint(buf, 2048);
+                        for b in arr.iter().copied() {
+                            write_ibyte(buf, b);
+                        }
+                    }
+                    for arr in block_light_arrays.iter() {
+                        write_varint(buf, 2048);
+                        for b in arr.iter().copied() {
+                            write_ibyte(buf, b);
+                        }
+                    }
                 }
             }
 
