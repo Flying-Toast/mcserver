@@ -85,6 +85,41 @@ pub struct DeathInfo<'a> {
     pub location: Position,
 }
 
+#[derive(Debug)]
+pub struct BitSet {
+    longs: Vec<i64>,
+}
+
+impl BitSet {
+    /// Creates a BitSet with the fewest # of longs needed to hold `n` bits. initializes all bits to 0
+    pub fn with_num_bits(n: usize) -> Self {
+        Self {
+            longs: vec![0; n.div_ceil(64)],
+        }
+    }
+
+    fn compute_idx(&self, bit_idx: usize) -> (usize, usize) {
+        assert!(
+            bit_idx < 64 * self.longs.len(),
+            "bit index {bit_idx} out of range for nbits={}",
+            64 * self.longs.len()
+        );
+
+        (bit_idx / 64, bit_idx % 64)
+    }
+
+    pub fn set(&mut self, bit_idx: usize) {
+        let (long_idx, bit_idx) = self.compute_idx(bit_idx);
+        self.longs[long_idx] |= 1 << bit_idx;
+    }
+
+    pub fn get(&self, bit_idx: usize) -> bool {
+        let (long_idx, bit_idx) = self.compute_idx(bit_idx);
+
+        (self.longs[long_idx] & (1 << bit_idx)) != 0
+    }
+}
+
 // TODO: OutPacket trait, and make each outpacket variant its own type
 #[derive(Debug)]
 pub enum OutPacket<'a> {
@@ -493,4 +528,35 @@ fn write_position<W: Write>(w: &mut W, p: &Position) {
     packed |= y & mask_12bits;
 
     w.write(&packed.to_be_bytes()).unwrap();
+}
+
+fn write_bitset<W: Write>(w: &mut W, bs: &BitSet) {
+    write_varint(w, bs.longs.len().try_into().unwrap());
+    for l in bs.longs.iter().copied() {
+        write_long(w, l);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bitset() {
+        let mut bs = BitSet::with_num_bits(1);
+        assert!(bs.longs.len() == 1);
+
+        let set_bit_idxs = [12, 1, 0, 4];
+        for i in set_bit_idxs.iter() {
+            bs.set(*i);
+        }
+
+        for i in 0..64 {
+            if set_bit_idxs.contains(&i) {
+                assert!(bs.get(i), "Unexpected bit {i} = 0");
+            } else {
+                assert!(!bs.get(i), "Unexpected bit {i} = 1");
+            }
+        }
+    }
 }
