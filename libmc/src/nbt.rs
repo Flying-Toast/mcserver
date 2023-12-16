@@ -278,34 +278,42 @@ fn write_compound_nbt_no_tagtype<W: Write>(w: &mut W, nbt: &CompoundNbt<'_>) {
             Nbt::Compound(c) => write_compound_nbt(w, c),
             Nbt::String(s) => {
                 write_tagtype(w, TagType::String);
+                write_ushort_string(w, prop_name);
                 write_ushort_string(w, s);
             }
             Nbt::Byte(b) => {
                 write_tagtype(w, TagType::Byte);
+                write_ushort_string(w, prop_name);
                 write_ibyte(w, *b);
             }
             Nbt::Short(s) => {
                 write_tagtype(w, TagType::Short);
+                write_ushort_string(w, prop_name);
                 write_short(w, *s);
             }
             Nbt::Int(i) => {
                 write_tagtype(w, TagType::Int);
+                write_ushort_string(w, prop_name);
                 write_int(w, *i);
             }
             Nbt::Long(x) => {
                 write_tagtype(w, TagType::Long);
+                write_ushort_string(w, prop_name);
                 write_long(w, *x);
             }
             Nbt::Float(x) => {
                 write_tagtype(w, TagType::Float);
+                write_ushort_string(w, prop_name);
                 write_float(w, *x);
             }
             Nbt::Double(x) => {
                 write_tagtype(w, TagType::Double);
+                write_ushort_string(w, prop_name);
                 write_double(w, *x);
             }
             Nbt::List(l) => {
                 write_tagtype(w, TagType::List);
+                write_ushort_string(w, prop_name);
                 match l {
                     NbtList::Compound(c) => {
                         write_tagtype(w, TagType::Compound);
@@ -367,6 +375,7 @@ fn write_compound_nbt_no_tagtype<W: Write>(w: &mut W, nbt: &CompoundNbt<'_>) {
             }
             Nbt::ByteArray(arr) => {
                 write_tagtype(w, TagType::ByteArray);
+                write_ushort_string(w, prop_name);
                 write_int(w, arr.len().try_into().unwrap());
                 for b in arr.iter().copied() {
                     write_ibyte(w, b);
@@ -374,6 +383,7 @@ fn write_compound_nbt_no_tagtype<W: Write>(w: &mut W, nbt: &CompoundNbt<'_>) {
             }
             Nbt::IntArray(arr) => {
                 write_tagtype(w, TagType::IntArray);
+                write_ushort_string(w, prop_name);
                 write_int(w, arr.len().try_into().unwrap());
                 for x in arr.iter().copied() {
                     write_int(w, x);
@@ -381,6 +391,7 @@ fn write_compound_nbt_no_tagtype<W: Write>(w: &mut W, nbt: &CompoundNbt<'_>) {
             }
             Nbt::LongArray(arr) => {
                 write_tagtype(w, TagType::LongArray);
+                write_ushort_string(w, prop_name);
                 write_int(w, arr.len().try_into().unwrap());
                 for x in arr.iter().copied() {
                     write_long(w, x);
@@ -417,7 +428,7 @@ mod tests {
     }
 
     #[test]
-    fn basic_nbt_deser() {
+    fn basic_nbt_serde() {
         let buf = [
             0x0a, 0x00, 0x0b, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64,
             0x08, 0x00, 0x04, 0x6d, 0x65, 0x6d, 0x65, 0x00, 0x09, 0x42, 0x61, 0x6e, 0x61, 0x6e,
@@ -432,5 +443,9 @@ mod tests {
             panic!("expected string, got {foo:?}");
         };
         assert_eq!(s, "Bananrama");
+
+        let mut deserialized = Vec::with_capacity(buf.len());
+        write_compound_nbt(&mut deserialized, &compound);
+        assert_eq!(buf.as_slice(), &deserialized);
     }
 }
