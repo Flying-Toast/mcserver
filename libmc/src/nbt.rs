@@ -1,7 +1,8 @@
 use crate::proto::*;
+use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::io::Read;
+use std::io::{Read, Write};
 
 #[derive(Debug, Clone)]
 pub struct CompoundNbt<'a> {
@@ -22,12 +23,15 @@ impl<'a> CompoundNbt<'a> {
     }
 
     pub fn get<'b>(&'b self, name: &str) -> Option<&'b Nbt<'a>> {
-        // we have borrow, egg bacon and borrow, bacon egg borrow and borrow, std::borrow::Borrow::borrow...
-        self.props.get(name).map(std::borrow::Borrow::borrow)
+        self.props.get(name).map(Borrow::borrow)
     }
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn props(&self) -> impl Iterator<Item = (&str, &Nbt<'a>)> {
+        self.props.iter().map(|(a, b)| (a.borrow(), b.borrow()))
     }
 }
 
@@ -261,6 +265,135 @@ fn read_tagtype<R: Read>(r: &mut R) -> TagType {
         12 => LongArray,
         x => panic!("bad tag type {x}"),
     }
+}
+
+fn write_tagtype<W: Write>(w: &mut W, tt: TagType) {
+    write_ibyte(w, tt as i8);
+}
+
+fn write_compound_nbt_no_tagtype<W: Write>(w: &mut W, nbt: &CompoundNbt<'_>) {
+    write_ushort_string(w, &nbt.name);
+    for (prop_name, prop_value) in nbt.props() {
+        match prop_value {
+            Nbt::Compound(c) => write_compound_nbt(w, c),
+            Nbt::String(s) => {
+                write_tagtype(w, TagType::String);
+                write_ushort_string(w, s);
+            }
+            Nbt::Byte(b) => {
+                write_tagtype(w, TagType::Byte);
+                write_ibyte(w, *b);
+            }
+            Nbt::Short(s) => {
+                write_tagtype(w, TagType::Short);
+                write_short(w, *s);
+            }
+            Nbt::Int(i) => {
+                write_tagtype(w, TagType::Int);
+                write_int(w, *i);
+            }
+            Nbt::Long(x) => {
+                write_tagtype(w, TagType::Long);
+                write_long(w, *x);
+            }
+            Nbt::Float(x) => {
+                write_tagtype(w, TagType::Float);
+                write_float(w, *x);
+            }
+            Nbt::Double(x) => {
+                write_tagtype(w, TagType::Double);
+                write_double(w, *x);
+            }
+            Nbt::List(l) => {
+                write_tagtype(w, TagType::List);
+                match l {
+                    NbtList::Compound(c) => {
+                        write_tagtype(w, TagType::Compound);
+                        write_int(w, c.len().try_into().unwrap());
+                        for x in c.iter() {
+                            write_compound_nbt_no_tagtype(w, x);
+                        }
+                    }
+                    NbtList::Byte(lst) => {
+                        write_tagtype(w, TagType::Byte);
+                        write_int(w, lst.len().try_into().unwrap());
+                        for x in lst.iter() {
+                            write_ibyte(w, *x);
+                        }
+                    }
+                    NbtList::Short(lst) => {
+                        write_tagtype(w, TagType::Short);
+                        write_int(w, lst.len().try_into().unwrap());
+                        for x in lst.iter() {
+                            write_short(w, *x);
+                        }
+                    }
+                    NbtList::Int(lst) => {
+                        write_tagtype(w, TagType::Int);
+                        write_int(w, lst.len().try_into().unwrap());
+                        for x in lst.iter() {
+                            write_int(w, *x);
+                        }
+                    }
+                    NbtList::Long(lst) => {
+                        write_tagtype(w, TagType::Long);
+                        write_int(w, lst.len().try_into().unwrap());
+                        for x in lst.iter() {
+                            write_long(w, *x);
+                        }
+                    }
+                    NbtList::Float(lst) => {
+                        write_tagtype(w, TagType::Float);
+                        write_int(w, lst.len().try_into().unwrap());
+                        for x in lst.iter() {
+                            write_float(w, *x);
+                        }
+                    }
+                    NbtList::Double(lst) => {
+                        write_tagtype(w, TagType::Double);
+                        write_int(w, lst.len().try_into().unwrap());
+                        for x in lst.iter() {
+                            write_double(w, *x);
+                        }
+                    }
+                    NbtList::String(lst) => {
+                        write_tagtype(w, TagType::String);
+                        write_int(w, lst.len().try_into().unwrap());
+                        for x in lst.iter() {
+                            write_ushort_string(w, x);
+                        }
+                    }
+                }
+            }
+            Nbt::ByteArray(arr) => {
+                write_tagtype(w, TagType::ByteArray);
+                write_int(w, arr.len().try_into().unwrap());
+                for b in arr.iter().copied() {
+                    write_ibyte(w, b);
+                }
+            }
+            Nbt::IntArray(arr) => {
+                write_tagtype(w, TagType::IntArray);
+                write_int(w, arr.len().try_into().unwrap());
+                for x in arr.iter().copied() {
+                    write_int(w, x);
+                }
+            }
+            Nbt::LongArray(arr) => {
+                write_tagtype(w, TagType::LongArray);
+                write_int(w, arr.len().try_into().unwrap());
+                for x in arr.iter().copied() {
+                    write_long(w, x);
+                }
+            }
+        }
+    }
+    write_tagtype(w, TagType::End);
+}
+
+pub(crate) fn write_compound_nbt<W: Write>(w: &mut W, nbt: &CompoundNbt<'_>) {
+    write_tagtype(w, TagType::Compound);
+    write_compound_nbt_no_tagtype(w, nbt);
 }
 
 #[cfg(test)]

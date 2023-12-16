@@ -127,8 +127,8 @@ pub struct BlockEntity<'a> {
     pub x: u8,
     pub z: u8,
     pub y: i16,
-    /// the type of this blockentity
-    pub blockent_type: i64,
+    /// type
+    pub tipe: i64,
     pub data: CompoundNbt<'a>,
 }
 
@@ -421,7 +421,7 @@ impl<R: Read, W: Write> PacketStream<R, W> {
 
                     write_int(buf, chunk_x);
                     write_int(buf, chunk_z);
-                    write_nbt(buf, heightmaps);
+                    write_compound_nbt(buf, &heightmaps);
                     write_varint(buf, data.len().try_into().unwrap());
                     for x in data.iter().copied() {
                         write_ibyte(buf, x);
@@ -500,6 +500,12 @@ pub(crate) fn read_ushort_string<R: Read>(r: &mut R) -> String {
     r.read_exact(&mut vs).unwrap();
     // TODO: convert from Java's "Modified UTF-8" :(
     String::from_utf8(vs).unwrap()
+}
+
+pub(crate) fn write_ushort_string<W: Write>(w: &mut W, s: &str) {
+    write_ushort(w, s.len().try_into().unwrap());
+    // TODO: convert to java "Modified UTF-8"
+    w.write(s.as_bytes()).unwrap();
 }
 
 pub(crate) fn read_varint_string<R: Read>(r: &mut R) -> String {
@@ -592,6 +598,14 @@ pub(crate) fn write_ibyte<W: Write>(w: &mut W, byte: i8) {
     w.write(&byte.to_be_bytes()).unwrap();
 }
 
+pub(crate) fn write_short<W: Write>(w: &mut W, short: i16) {
+    w.write(&short.to_be_bytes()).unwrap();
+}
+
+pub(crate) fn write_ushort<W: Write>(w: &mut W, ushort: u16) {
+    w.write(&ushort.to_be_bytes()).unwrap();
+}
+
 pub(crate) fn write_uuid<W: Write>(w: &mut W, uuid: u128) {
     w.write(&uuid.to_be_bytes()).unwrap();
 }
@@ -612,6 +626,14 @@ pub(crate) fn write_int<W: Write>(w: &mut W, int: i32) {
 
 pub(crate) fn write_long<W: Write>(w: &mut W, long: i64) {
     w.write(&long.to_be_bytes()).unwrap();
+}
+
+pub(crate) fn write_float<W: Write>(w: &mut W, x: f32) {
+    w.write(&x.to_be_bytes()).unwrap();
+}
+
+pub(crate) fn write_double<W: Write>(w: &mut W, x: f64) {
+    w.write(&x.to_be_bytes()).unwrap();
 }
 
 pub(crate) fn write_game_mode<W: Write>(w: &mut W, gm: GameMode) {
@@ -644,6 +666,13 @@ pub(crate) fn write_bitset<W: Write>(w: &mut W, bs: &BitSet) {
     for l in bs.longs.iter().copied() {
         write_long(w, l);
     }
+}
+
+pub(crate) fn write_block_entity<W: Write>(w: &mut W, bent: &BlockEntity<'_>) {
+    write_ibyte(w, ((bent.x as i8 & 15) << 4) | (bent.z as i8 & 15));
+    write_short(w, bent.y);
+    write_varint(w, bent.tipe);
+    write_compound_nbt(w, &bent.data);
 }
 
 #[cfg(test)]
