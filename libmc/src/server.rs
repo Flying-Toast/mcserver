@@ -72,7 +72,7 @@ pub fn run_server<S: Server>(mut s: S) {
                 empty_block_light_mask: BitSet::with_num_bits(0),
                 sky_light_arrays,
                 block_light_arrays,
-            })
+            });
         }
         s.handle_packet(todo_cid, packet);
     }

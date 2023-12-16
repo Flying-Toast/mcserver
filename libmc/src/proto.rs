@@ -441,6 +441,7 @@ impl<R: Read, W: Write> PacketStream<R, W> {
                             write_ibyte(buf, b);
                         }
                     }
+                    write_varint(buf, block_light_arrays.len().try_into().unwrap());
                     for arr in block_light_arrays.iter() {
                         write_varint(buf, 2048);
                         for b in arr.iter().copied() {
