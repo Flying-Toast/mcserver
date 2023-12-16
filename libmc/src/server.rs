@@ -56,23 +56,6 @@ pub fn run_server<S: Server>(mut s: S) {
                 death_info: None,
                 portal_cooldown: 5,
             });
-
-            let mut heightmaps = CompoundNbt::new("");
-            let sky_light_arrays = &[];
-            let block_light_arrays = sky_light_arrays;
-            ps.send(OutPacket::ChunkDataAndUpdateLight {
-                chunk_x: 0,
-                chunk_z: 0,
-                heightmaps,
-                data: &[],
-                block_entities: &[],
-                sky_light_mask: BitSet::with_num_bits(0),
-                block_light_mask: BitSet::with_num_bits(0),
-                empty_sky_light_mask: BitSet::with_num_bits(0),
-                empty_block_light_mask: BitSet::with_num_bits(0),
-                sky_light_arrays,
-                block_light_arrays,
-            });
         }
         s.handle_packet(todo_cid, packet);
     }

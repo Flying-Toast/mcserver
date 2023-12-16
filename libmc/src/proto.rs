@@ -184,6 +184,15 @@ pub enum OutPacket<'a> {
         sky_light_arrays: &'a [[i8; 2048]],
         block_light_arrays: &'a [[i8; 2048]],
     },
+    SyncPlayerPos {
+        x: f64,
+        y: f64,
+        z: f64,
+        yaw: f32,
+        pitch: f32,
+        flags: i8,
+        teleport_id: i64,
+    },
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -448,6 +457,25 @@ impl<R: Read, W: Write> PacketStream<R, W> {
                             write_ibyte(buf, b);
                         }
                     }
+                }
+                OutPacket::SyncPlayerPos {
+                    x,
+                    y,
+                    z,
+                    yaw,
+                    pitch,
+                    flags,
+                    teleport_id,
+                } => {
+                    // packet ID:
+                    write_varint(buf, 0x3E);
+
+                    write_double(buf, x);
+                    write_double(buf, y);
+                    write_double(buf, z);
+                    write_float(buf, yaw);
+                    write_ibyte(buf, flags);
+                    write_varint(buf, teleport_id);
                 }
             }
 
