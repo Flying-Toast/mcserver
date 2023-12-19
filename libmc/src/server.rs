@@ -27,7 +27,7 @@ pub fn run_server<S: Server>(mut s: S) {
             ps.send(OutPacket::LoginSuccess {
                 uuid: 123,
                 username: "foobar",
-                props: Vec::new(),
+                props: &[],
             });
         }
 
@@ -39,7 +39,7 @@ pub fn run_server<S: Server>(mut s: S) {
             ps.send(OutPacket::LoginPlay {
                 entity_id: 1,
                 is_hardcore: false,
-                dimension_names: vec!["foo:bar"],
+                dimension_names: &["foo:bar"],
                 max_players: 456,
                 view_distance: 111,
                 simulation_distance: 222,

@@ -143,7 +143,7 @@ pub enum OutPacket<'a> {
         uuid: u128,
         username: &'a str,
         //TODO: what are these props for?
-        props: Vec<LoginSuccessProp<'a>>,
+        props: &'a [LoginSuccessProp<'a>],
     },
     FinishConfig,
     LoginPlay {
@@ -151,7 +151,7 @@ pub enum OutPacket<'a> {
         entity_id: i32,
         is_hardcore: bool,
         // TODO: Identifier type?
-        dimension_names: Vec<&'a str>,
+        dimension_names: &'a [&'a str],
         max_players: i64,
         view_distance: i64,
         simulation_distance: i64,
