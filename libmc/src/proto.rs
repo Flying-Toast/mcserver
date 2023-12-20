@@ -683,6 +683,7 @@ pub(crate) fn write_position<W: Write>(w: &mut W, p: &Position) {
     assert!(z == z & mask_26bits, "Position.z is bigger than 26 bits");
     assert!(y == y & mask_12bits, "Position.y is bigger than 12 bits");
 
+    // TODO: double-check this signed bitbasking - sign bit kept?
     packed |= (x & mask_26bits) << 38;
     packed |= (z & mask_26bits) << 12;
     packed |= y & mask_12bits;
